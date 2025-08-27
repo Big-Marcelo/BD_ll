@@ -1,0 +1,100 @@
+Exercícios do Roteiro de Aula 2 
+
+'Exercício 1: Consulta sem índice'
+
+EXPLAIN ANALYZE
+SELECT * FROM usuarios WHERE email = 'usuario_500000@teste.com';
+
+"QUERY PLAN"
+"Gather  (cost=1000.00..13561.43 rows=1 width=29) (actual time=55.508..59.533 rows=1 loops=1)"
+"  Workers Planned: 2"
+"  Workers Launched: 2"
+"  ->  Parallel Seq Scan on usuarios  (cost=0.00..12561.33 rows=1 width=29) (actual time=24.337..29.284 rows=0 loops=3)"
+"        Filter: (email = 'usuario_500000@teste.com'::text)"
+"        Rows Removed by Filter: 333333"
+"Planning Time: 1.007 ms"
+"Execution Time: 59.561 ms"
+
+'Exercício 2: Criando e consultando com índice B-Tree'
+
+CREATE INDEX idx_usuarios_email_btree ON usuarios (email);
+
+EXPLAIN ANALYZE
+SELECT * FROM usuarios WHERE email = 'usuario_500000@teste.com';
+
+"Index Scan using idx_usuarios_email_btree on usuarios  (cost=0.42..8.44 rows=1 width=29) (actual time=0.057..0.057 rows=1 loops=1)"
+"  Index Cond: (email = 'usuario_500000@teste.com'::text)"
+"Planning Time: 1.019 ms"
+"Execution Time: 0.070 ms"
+
+'Exercício 3: Criando e consultando com índice Hash'
+
+DROP INDEX idx_usuarios_email_btree;
+
+CREATE INDEX idx_usuarios_email_hash ON usuarios USING hash (email);
+
+EXPLAIN ANALYZE
+SELECT * FROM usuarios WHERE email = 'usuario_500000@teste.com';
+
+"Index Scan using idx_usuarios_email_hash on usuarios  (cost=0.00..8.02 rows=1 width=29) (actual time=0.051..0.055 rows=1 loops=1)"
+"  Index Cond: (email = 'usuario_500000@teste.com'::text)"
+"Planning Time: 1.053 ms"
+"Execution Time: 0.080 ms"
+
+'Exercício 4: Comparação dos Resultados'
+
+Planning Time:  Sem índice - 1.007 ms 
+                B-Tree - 1.019 ms
+                Hash - 1.053 ms
+
+Execution Time: Sem índice - 59.561 ms
+                B-Tree - 0.070 ms
+                Hash - 0.080 ms
+
+Index scan e o B-Tree foi mais rápido que o Hash
+
+'Exercício 5: Consulta em Coluna Booleana'
+
+EXPLAIN ANALYZE
+SELECT * FROM usuarios WHERE ativo = true;
+
+"Seq Scan on usuarios  (cost=0.00..17353.00 rows=500633 width=29) (actual time=0.010..61.511 rows=499745 loops=1)"
+"  Filter: ativo"
+"  Rows Removed by Filter: 500255"
+"Planning Time: 0.054 ms"
+"Execution Time: 72.044 ms"
+
+Ignorou e executou Seq Scan
+
+'Exercício 6: Valores Repetidos'
+
+Não, o planejador executou um Seq Scan
+
+'Exercício TBL'
+"a) Em qual cenário o HASH realmente ganha do B-Tree?"
+
+O índice Hash pode ser ligeiramente mais rápido que o B-Tree em cenários muito específicos: consultas que usam apenas comparações de igualdade (=) , em tabelas muito grandes onde a estrutura de um índice B-Tree pode se tornar pesada. 
+No entanto, o ganho costuma ser pequeno, e na maioria dos casos práticos, o B-Tree é a escolha padrão por ser mais versátil.
+
+
+"b) O que acontece com consultas como LIKE 'usuario_%'? O Hash index pode ser usado?"
+
+Não, o índice Hash não pode ser usado, Índices Hash são otimizados exclusivamente para comparações de igualdade. 
+Eles não preservam a ordem dos dados e, portanto, não funcionam com operadores de intervalo (<, >) ou de padrão como o LIKE. Uma consulta com LIKE resultará em um Seq Scan.
+
+"c) Se eu filtrar WHERE email IN ('usuario_10@teste.com', 'usuario_20@teste.com'), o PostgreSQL usará o índice HASH?"
+
+O índice Hash não suporta o operador IN de forma eficiente. 
+Embora o PostgreSQL possa, teoricamente, quebrar a operação IN em múltiplas buscas de igualdade, o otimizador geralmente prefere um Seq Scan ou um índice B-Tree, que é muito mais eficiente para lidar com listas de valores.
+
+"d) Qual índice ocupa mais espaço em disco: B-Tree ou HASH?"
+
+O índice HASH ocupa mais espaço.
+Isso porque ele precisa manter as tabelas de hashing, buckets, e pode gerar overflow.
+O B-Tree é mais eficiente em espaço e ainda cobre mais tipos de consultas.
+
+"e) Se eu apagar 90% das linhas da tabela, como isso afeta a utilidade do índice hash?"
+
+Apagar um grande volume de linhas causa fragmentação no índice (conhecido como "bloat"). O espaço ocupado pelas linhas deletadas não é liberado automaticamente. O índice continuará grande, mas cheio de "entradas mortas", o que o torna menos eficiente. 
+Para corrigir isso, seria necessária uma operação de manutenção, como um REINDEX, para reconstruir o índice e remover a fragmentação. 
+Além disso, se a tabela ficar muito pequena, o planejador pode optar por um Seq Scan de qualquer maneira, pois o custo de ler a tabela inteira se torna menor do que o de consultar um índice.
