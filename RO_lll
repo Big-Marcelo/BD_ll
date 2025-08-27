@@ -1,0 +1,95 @@
+Exercício 1: Testar consultas com filtros muito seletivos (idade = 75) e pouco seletivos(idade > 10).
+
+EXPLAIN ANALYZE
+SELECT * FROM cliente WHERE idade = 75;
+
+"Bitmap Heap Scan on cliente  (cost=18.27..778.96 rows=1287 width=23) (actual time=0.196..0.601 rows=1260 loops=1)"
+"  Recheck Cond: (idade = 75)"
+"  Heap Blocks: exact=606"
+"  ->  Bitmap Index Scan on idx_idade  (cost=0.00..17.95 rows=1287 width=0) (actual time=0.139..0.139 rows=1260 loops=1)"
+"        Index Cond: (idade = 75)"
+"Planning Time: 0.111 ms"
+"Execution Time: 0.667 ms"
+
+O plano é Bitmap Heap Scan
+
+EXPLAIN ANALYZE
+SELECT * FROM cliente WHERE idade > 10;
+
+"Seq Scan on cliente  (cost=0.00..1976.00 rows=86997 width=23) (actual time=0.012..6.643 rows=86889 loops=1)"
+"  Filter: (idade > 10)"
+"  Rows Removed by Filter: 13111"
+"Planning Time: 0.071 ms"
+"Execution Time: 8.289 ms"
+
+
+Exercício 2:  Consultar com duas condições (cidade = 'RJ' AND idade > 40) e verificar o uso de Bitmap.
+
+EXPLAIN ANALYZE
+SELECT * FROM cliente WHERE cidade = 'RJ' AND idade > 40;
+
+"Bitmap Heap Scan on cliente  (cost=555.47..2019.57 rows=24482 width=23) (actual time=1.471..7.236 rows=24715 loops=1)"
+"  Recheck Cond: (idade > 40)"
+"  Filter: (cidade = 'RJ'::text)"
+"  Rows Removed by Filter: 24589"
+"  Heap Blocks: exact=726"
+"  ->  Bitmap Index Scan on idx_idade  (cost=0.00..549.35 rows=49207 width=0) (actual time=1.398..1.398 rows=49304 loops=1)"
+"        Index Cond: (idade > 40)"
+"Planning Time: 0.106 ms"
+"Execution Time: 7.704 ms"
+
+
+Exercício 3: Remover índices e observar como o PostgreSQL volta a usar Seq Scan.
+
+DROP INDEX idx_idade;
+DROP INDEX idx_cidade;
+
+EXPLAIN ANALYZE
+SELECT * FROM cliente WHERE cidade = 'RJ';
+
+"Seq Scan on cliente  (cost=0.00..1976.00 rows=49753 width=23) (actual time=0.008..8.562 rows=49943 loops=1)"
+"  Filter: (cidade = 'RJ'::text)"
+"  Rows Removed by Filter: 50057"
+"Planning Time: 0.436 ms"
+"Execution Time: 9.509 ms"
+
+
+Exercício 4: Compare com on. (SET enable_bitmapscan = off;)
+
+EXPLAIN ANALYZE
+SELECT * FROM cliente WHERE idade > 30 AND cidade = 'SP';
+
+ON
+"Bitmap Heap Scan on cliente  (cost=560.88..2040.58 rows=30935 width=23) (actual time=1.198..6.534 rows=30833 loops=1)"
+"  Recheck Cond: (cidade = 'SP'::text)"
+"  Filter: (idade > 30)"
+"  Rows Removed by Filter: 19224"
+"  Heap Blocks: exact=726"
+"  ->  Bitmap Index Scan on idx_cidade  (cost=0.00..553.14 rows=50247 width=0) (actual time=1.128..1.128 rows=50057 loops=1)"
+"        Index Cond: (cidade = 'SP'::text)"
+"Planning Time: 1.350 ms"
+"Execution Time: 7.113 ms"
+
+OFF
+"Seq Scan on cliente  (cost=0.00..2226.00 rows=30935 width=23) (actual time=0.015..8.562 rows=30833 loops=1)"
+"  Filter: ((idade > 30) AND (cidade = 'SP'::text))"
+"  Rows Removed by Filter: 69167"
+"Planning Time: 0.099 ms"
+"Execution Time: 9.174 ms"
+
+
+Exercício 5: Qual diferença de tempo entre usar Bitmap Index Scan e Seq Scan nessa tabela?
+
+A diferença de tempo dependerá da seletividade da consulta. 
+Para uma consulta como SELECT * FROM cliente WHERE idade > 30 AND cidade = 'SP';, que retorna um número mediano de registro, o Bitmap Index Scan é geralmente mais rápido.
+Já o Seq Scan precisa ler a tabela inteira, o que é ineficiente quando apenas uma fração dos dados é necessária.
+
+
+Exercício 6: Quando faz sentido criar vários índices separados para consultas combinadas?
+
+Faz sentido criar vários índices separados em colunas que são frequentemente usadas em conjunto em cláusulas WHERE, mas também aparecem individualmente em outras consultas.
+
+
+Exercício 7: Por que o PostgreSQL prefere Bitmap Index Scan quando há múltiplas condições em índices diferentes?
+
+O PostgreSQL prefere o Bitmap Index Scan quando há múltiplas condições em índices diferentes porque essa abordagem permite combinar eficientemente os resultados de vários índices para satisfazer uma consulta complexa.
