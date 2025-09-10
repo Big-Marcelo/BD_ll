@@ -1,0 +1,109 @@
+[Exercicio1]
+
+titulo = Non-Repeatable Read (Leitura Não Repetível)
+tabela = contas
+dados_iniciais = 
+    id | saldo
+    1  | 1000
+
+transações = 
+    T1:
+        BEGIN;
+        SELECT saldo FROM contas WHERE id = 1; -- lê 1000
+        -- algum processamento
+        SELECT saldo FROM contas WHERE id = 1; -- lê 1500
+        COMMIT;
+
+    T2:
+        BEGIN;
+        UPDATE contas SET saldo = saldo + 500 WHERE id = 1;
+        COMMIT;
+
+problema = A transação T1 lê duas vezes o mesmo dado (saldo) e obtém valores diferentes devido ao commit de T2 no meio da transação.
+
+fenomeno = Non-repeatable read
+explicação = Leitura não repetível ocorre quando um dado lido duas vezes em uma mesma transação retorna valores diferentes por causa de uma alteração confirmada por outra transação.
+
+
+[Exercicio2]
+
+titulo = Phantom Read (Leitura Fantasma)
+tabela = pedidos
+dados_iniciais = cliente_id | valor
+                 10         | 100
+                 11         | 200
+
+transações = 
+    T1:
+        BEGIN;
+        SELECT * FROM pedidos WHERE valor > 150; -- retorna cliente_id 11
+        -- algum processamento
+        SELECT * FROM pedidos WHERE valor > 150; -- retorna cliente_id 11 e 12
+        COMMIT;
+
+    T2:
+        BEGIN;
+        INSERT INTO pedidos (id, cliente_id, valor) VALUES (3, 12, 250);
+        COMMIT;
+
+problema = O resultado da mesma consulta muda entre leituras dentro da mesma transação, por causa da inserção feita por T2.
+
+fenomeno = Phantom read
+explicação = Leitura fantasma ocorre quando linhas "novas" (ou excluídas) aparecem entre execuções da mesma consulta, afetando o resultado.
+
+
+[Exercicio3]
+
+titulo = Lost Update (Atualização Perdida)
+tabela = estoque
+dados_iniciais = id | quantidade
+                 1  | 50
+
+transações = 
+    T1:
+        BEGIN;
+        SELECT quantidade FROM estoque WHERE id = 1; -- lê 50
+        UPDATE estoque SET quantidade = quantidade - 10 WHERE id = 1;
+        COMMIT;
+
+    T2:
+        BEGIN;
+        SELECT quantidade FROM estoque WHERE id = 1; -- lê 50
+        UPDATE estoque SET quantidade = quantidade - 5 WHERE id = 1;
+        COMMIT;
+
+problema = A última transação a fazer commit sobrescreve a outra. O valor final pode ser incorreto (ex: 40 ou 45), perdendo uma das atualizações.
+
+fenomeno = Lost update
+explicação = Ambas as transações usam o mesmo valor base para atualizar, mas uma sobrescreve o resultado da outra sem detectar conflito.
+
+
+[Exercicio4]
+
+titulo = Write Skew (Escrita Incoerente)
+tabela = funcionarios
+dados_iniciais = 
+    id | nome  | de_plantao | disponivel
+    1  | Ana   | true       | true
+    2  | Bruno | true       | true
+
+regra_de_integridade = Pelo menos um funcionário deve estar disponível para atender
+
+transações = 
+    T1:
+        BEGIN;
+        SELECT disponivel FROM funcionarios WHERE id = 1; -- vê true
+        UPDATE funcionarios SET disponivel = false WHERE id = 1;
+        COMMIT;
+
+    T2:
+        BEGIN;
+        SELECT disponivel FROM funcionarios WHERE id = 2; -- vê true
+        UPDATE funcionarios SET disponivel = false WHERE id = 2;
+        COMMIT;
+
+problema = Ambas as transações fazem atualizações válidas isoladamente, mas juntas violam a regra de integridade.
+
+fenomeno = Write skew
+explicação = Escritas paralelas que dependem de verificações feitas antes das alterações podem gerar estados finais inválidos, mesmo sem conflito direto de dados.
+
