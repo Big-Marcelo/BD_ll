@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35931.197 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TBL_III", "TBL_III\TBL_III.csproj", "{AEBBE8E3-84D3-46CB-9C40-5945920E43C7}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AEBBE8E3-84D3-46CB-9C40-5945920E43C7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AEBBE8E3-84D3-46CB-9C40-5945920E43C7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AEBBE8E3-84D3-46CB-9C40-5945920E43C7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AEBBE8E3-84D3-46CB-9C40-5945920E43C7}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {369A5495-2D88-4004-8040-7CD647A84A07}
+	EndGlobalSection
+EndGlobal
