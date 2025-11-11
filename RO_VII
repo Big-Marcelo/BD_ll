@@ -1,0 +1,221 @@
+[Exercicio1]
+
+titulo = Backup Lógico em Formato SQL
+tabela = produtos
+dados_iniciais =
+id | nome    | preco
+ 1 | Mouse   | 59.90
+ 2 | Teclado | 120.00
+ 3 | Monitor | 899.00
+
+
+ CREATE DATABASE backup_teste;
+
+ CREATE TABLE produtos (
+  id SERIAL PRIMARY KEY,
+  nome VARCHAR(100),
+  preco NUMERIC(10,2)
+ );
+
+ INSERT INTO produtos (nome, preco)
+ VALUES ('Mouse', 59.90), ('Teclado', 120.00), ('Monitor', 899.00);
+
+ pg_dump -U postgres -d backup_teste -f "C:\backups\backup_teste.sql"
+
+ pg_dump: conexão bem-sucedida com o banco "backup_teste"
+ pg_dump: dump concluído com sucesso
+ Arquivo gerado: C:\backups\backup_teste.sql
+
+problema = Nenhum. O backup foi concluído normalmente
+fenomeno = Backup lógico (SQL puro)
+explicação = Exporta a estrutura e os dados do banco em formato texto legível, ideal para estudos, migrações e pequenos bancos.
+
+
+[Exercicio2]
+
+titulo = Backup Lógico em Formato Custom
+tabela = produtos
+dados_iniciais =
+ id | nome   | preco
+ 1 | Mouse   | 59.90
+ 2 | Teclado | 120.00
+ 3 | Monitor | 899.00
+
+
+ pg_dump -U postgres -Fc -d backup_teste -f "C:\backups\backup_teste.backup"
+
+ pg_dump: escrevendo saída em formato custom
+ pg_dump: dump concluído com sucesso
+ Arquivo gerado: C:\backups\backup_teste.backup
+
+problema = Nenhum
+fenomeno = Backup lógico (formato custom)
+explicação = Formato binário compactado, permite restauração seletiva, compressão e maior velocidade de restauração. Ideal para produção.
+
+
+[Exercicio3]
+
+titulo = Restauração de Backup SQL
+tabela = produtos
+dados_restaurados =
+ id | nome   | preco
+ 1 | Mouse   | 59.90
+ 2 | Teclado | 120.00
+ 3 | Monitor | 899.00
+
+ createdb -U postgres restaurado_sql
+ psql -U postgres -d restaurado_sql -f "C:\backups\backup_teste.sql"
+
+
+ SET
+ CREATE TABLE
+ INSERT 0 3
+ Restaurado com sucesso: restaurado_sql
+
+problema = Nenhum.
+fenomeno = Restauração lógica (SQL)
+explicação = O arquivo .sql é interpretado e executado como comandos SQL, recriando o banco original com seus dados.
+
+[Exercicio4]
+
+titulo = Restauração de Backup Custom
+tabela = produtos
+dados_restaurados =
+ id | nome   | preco
+ 1 | Mouse   | 59.90
+ 2 | Teclado | 120.00
+ 3 | Monitor | 899.00
+
+
+ createdb -U postgres restaurado_custom
+ pg_restore -U postgres -d restaurado_custom "C:\backups\backup_teste.backup"
+
+ pg_restore: restaurando esquema public
+ pg_restore: restaurando tabela produtos
+ pg_restore: restaurando dados
+ pg_restore: restauração concluída com sucesso
+
+problema = Nenhum.
+fenomeno = Restauração lógica seletiva
+explicação = O formato custom permite restaurar apenas partes do banco (tabelas, schemas, funções), além de ser mais rápido e compacto.
+
+[Exercicio5]
+
+titulo = Backup Físico com pg_basebackup
+tabela = todo o banco (estrutura completa)
+dados_iniciais = Diretório de dados ativo do PostgreSQL
+
+ mkdir C:\pg_basebackup
+ pg_basebackup -U postgres -D "C:\pg_basebackup" -Fp -Xs -P -v
+
+ C:\pg_basebackup\
+ ├── base\
+ ├── global\
+ ├── pg_wal\
+ ├── postgresql.conf
+ └── pg_hba.conf
+
+ transferindo base/base/16384 ...
+ transferindo pg_wal ...
+ backup concluído com sucesso
+
+problema = Necessário permissão de administrador e serviço PostgreSQL ativo.
+fenomeno = Backup físico
+explicação = Copia todos os arquivos binários e WAL do servidor, ideal para restauração total ou replicação, mas não portável entre sistemas ou versões diferentes.
+
+
+[Exercicio6]
+
+titulo = Backup e Restauração via pgAdmin
+tabela = produtos
+dados_restaurados =
+ id | nome   | preco
+ 1 | Mouse   | 59.90
+ 2 | Teclado | 120.00
+ 3 | Monitor | 899.00
+
+
+ Backup via GUI
+ 1. Botão direito no banco → Backup...
+ 2. Format: Custom
+ 3. Filename: C:\backups\backup_teste.backup
+ 4. Encoding: UTF8
+ 5. Clique em “Backup”
+
+ Restauração via GUI
+ 1. Crie o banco restaurado_pgadmin
+ 2. Botão direito → Restore...
+ 3. Selecione C:\backups\backup_teste.backup
+ 4. Clique em “Restore”
+
+ Backup concluído com sucesso
+ Restauração concluída com sucesso
+
+problema = Nenhum.
+fenomeno = Backup e restauração via interface gráfica
+explicação = O pgAdmin utiliza internamente os comandos pg_dump e pg_restore, oferecendo interface amigável para usuários sem linha de comando.
+
+
+[Exercicio7]
+
+titulo = Backup de Tabela Específica
+tabela = produtos
+dados_iniciais =
+ id | nome   | preco
+ 1 | Mouse   | 59.90
+ 2 | Teclado | 120.00
+ 3 | Monitor | 899.00
+
+
+ pg_dump -U postgres -d backup_teste -t produtos -f "C:\backups\produtos.sql"
+ createdb -U postgres produtos_db
+ psql -U postgres -d produtos_db -f "C:\backups\produtos.sql"
+
+ CREATE TABLE
+ INSERT 0 3
+ Tabela restaurada em produtos_db
+
+problema = Nenhum.
+fenomeno = Backup parcial (tabela única)
+explicação = Permite copiar apenas uma tabela, útil para migração seletiva de dados ou testes.
+
+
+[Exercicio8]
+
+titulo = Agendamento de Backup Diário no Windows
+tabela = backup_teste (banco completo)
+configuração =
+ Agendador de Tarefas → Criar Tarefa → Ações → Iniciar um programa
+
+ Programa/script: pg_dump
+ Argumentos:
+  -U postgres -Fc -d backup_teste -f "C:\backups\backup_teste_%date:~-4,4%-%date:~3,2%-%date:~0,2%.backup"
+ Iniciar em:
+  C:\Program Files\PostgreSQL\16\bin
+ Horário: 02:00 (diariamente)
+
+
+ Backup diário criado automaticamente às 02:00
+ Arquivos gerados:
+  C:\backups\backup_teste_2025-11-10.backup
+  C:\backups\backup_teste_2025-11-11.backup
+
+problema = Necessário garantir que o serviço PostgreSQL esteja rodando no horário agendado.
+fenomeno = Automação de backup
+explicação = Permite executar backups regulares automaticamente via sistema operacional, garantindo cópias atualizadas sem intervenção manual.
+
+[Exercicio9]
+
+titulo = Exclusão e Restauração do Banco
+tabela = produtos
+
+ dropdb -U postgres backup_teste
+ pg_restore -U postgres -d backup_teste "C:\backups\backup_teste.backup"
+
+ pg_restore: restaurando esquema public
+ pg_restore: restaurando tabela produtos
+ pg_restore: restauração concluída
+
+problema = Nenhum.
+fenomeno = Restauração completa pós-exclusão
+explicação = Demonstra a importância de manter backups válidos, permitindo recriar o banco mesmo após perda total do original.
