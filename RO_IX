@@ -1,0 +1,120 @@
+---------------------------------------------------------------------------
+-- EXERCÍCIO 1: CRIAR E POPULAR A TABELA
+-- Objetivo: Simular um ambiente com grande volume de dados (1 milhão de linhas).
+---------------------------------------------------------------------------
+
+-- Limpeza inicial (caso a tabela já exista de testes anteriores)
+DROP TABLE IF EXISTS clientes;
+
+-- Criação da tabela
+CREATE TABLE clientes (
+    cliente_id SERIAL PRIMARY KEY,
+    nome TEXT NOT NULL,
+    email TEXT NOT NULL
+);
+
+-- Inserção de 1 milhão de registros
+-- Utilizamos generate_series para criar dados fictícios rapidamente
+INSERT INTO clientes (nome, email)
+SELECT
+    'Cliente ' || g AS nome,
+    'cliente' || g || '@exemplo.com' AS email
+FROM generate_series(1, 1000000) AS g;
+
+---------------------------------------------------------------------------
+-- EXERCÍCIO 2: ANÁLISE DA CONSULTA SEM ÍNDICE
+-- Objetivo: Observar o "Seq Scan" (varredura sequencial).
+---------------------------------------------------------------------------
+
+-- Executar o Explain Analyze para ver o plano de execução
+-- Esperado: Parallel Seq Scan, Custo alto, Tempo ~150ms+
+EXPLAIN ANALYZE
+SELECT * FROM clientes WHERE nome = 'Cliente 500000';
+
+---------------------------------------------------------------------------
+-- EXERCÍCIO 3: CRIAR UM ÍNDICE E REALIZAR A ANÁLISE NOVAMENTE
+-- Objetivo: Observar o "Index Scan" e a redução de custo.
+---------------------------------------------------------------------------
+
+-- Criação do índice B-Tree na coluna 'nome'
+CREATE INDEX idx_clientes_nome ON clientes(nome);
+
+-- Executar a mesma consulta novamente
+-- Esperado: Index Scan, Custo baixo, Tempo < 1ms
+EXPLAIN ANALYZE
+SELECT * FROM clientes WHERE nome = 'Cliente 500000';
+
+---------------------------------------------------------------------------
+-- EXERCÍCIO 5: ANÁLISE DE DIFERENTES CHAVES DE INDEXAÇÃO
+-- Objetivo: Demonstrar que o índice precisa corresponder à coluna do WHERE.
+---------------------------------------------------------------------------
+
+-- 5.1 Consulta na coluna 'email' (que ainda não tem índice)
+-- Esperado: Seq Scan (lento)
+EXPLAIN ANALYZE 
+SELECT * FROM clientes WHERE email = 'cliente123456@exemplo.com';
+
+-- 5.2 Otimização: Criando o índice correto
+-- Removemos o índice anterior (opcional, apenas para seguir o roteiro) e criamos o de email
+DROP INDEX IF EXISTS idx_clientes_nome;
+
+CREATE INDEX idx_clientes_email ON clientes(email);
+
+-- Executar a consulta novamente
+-- Esperado: Index Scan (rápido)
+EXPLAIN ANALYZE 
+SELECT * FROM clientes WHERE email = 'cliente123456@exemplo.com';
+
+---------------------------------------------------------------------------
+-- EXERCÍCIO 6: PESQUISA E APLICAÇÃO (ÍNDICES COMPOSTOS E PARCIAIS)
+-- Preparação do novo ambiente com colunas adicionais (cidade, idade).
+---------------------------------------------------------------------------
+
+-- Recriar a tabela com nova estrutura
+DROP TABLE IF EXISTS clientes;
+
+CREATE TABLE clientes (
+    id SERIAL PRIMARY KEY,
+    nome TEXT NOT NULL,
+    cidade TEXT NOT NULL,
+    idade INT NOT NULL
+);
+
+-- Popular com dados aleatórios para idade e cidade
+INSERT INTO clientes (nome, cidade, idade)
+SELECT
+    'Cliente ' || g,
+    'Cidade ' || (g % 100),   -- Gera cidades de 'Cidade 0' a 'Cidade 99'
+    (random() * 80)::INT      -- Gera idades aleatórias até 80
+FROM generate_series(1, 1000000) g;
+
+-- A) OTIMIZANDO COM ÍNDICE COMPOSTO
+-- Consulta alvo: Filtrar por cidade E idade
+-- EXPLAIN ANALYZE SELECT * FROM clientes WHERE cidade = 'Cidade 50' AND idade = 30;
+
+-- Criar índice composto (A ordem importa!)
+CREATE INDEX idx_clientes_cidade_idade ON clientes(cidade, idade);
+
+-- Teste a consulta otimizada:
+EXPLAIN ANALYZE 
+SELECT * FROM clientes WHERE cidade = 'Cidade 50' AND idade = 30;
+
+-- B) TESTE DE INVERSÃO DE COLUNAS (Opcional)
+-- Criar índice invertido para comparação
+CREATE INDEX idx_clientes_idade_cidade ON clientes (idade, cidade);
+
+-- O Postgres preferirá o índice 'idx_clientes_cidade_idade' para a query acima 
+-- pois 'cidade' é o primeiro filtro restritivo.
+
+-- C) OTIMIZANDO COM ÍNDICE PARCIAL
+-- Objetivo: Indexar apenas uma fatia dos dados (ex: idosos), economizando espaço.
+
+CREATE INDEX idx_clientes_idade_maior_60 ON clientes(idade) WHERE idade > 60;
+
+-- Consulta 1: Usa o índice (pois busca idade > 65, que está dentro de > 60)
+EXPLAIN ANALYZE 
+SELECT * FROM clientes WHERE idade > 65;
+
+-- Consulta 2: NÃO usa o índice (pois busca idade < 20, que não foi indexado)
+EXPLAIN ANALYZE 
+SELECT * FROM clientes WHERE idade < 20;
