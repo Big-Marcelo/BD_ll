@@ -1,0 +1,143 @@
+Exercícios de Indexação em Banco de Dados
+
+Exercício 1: Criar e Popular a Tabela
+Criação de uma tabela de clientes e inserção de 1 milhão de registros para simular um ambiente de produção.
+
+SQL
+
+CREATE TABLE clientes (
+    cliente_id SERIAL PRIMARY KEY,
+    nome TEXT NOT NULL,
+    email TEXT NOT NULL
+);
+
+INSERT INTO clientes (nome, email)
+SELECT
+    'Cliente ' || g AS nome,
+    'cliente' || g || '@exemplo.com' AS email
+FROM generate_series(1, 1000000) AS g;
+Exercício 2: Análise da Consulta sem Índice
+Execução de uma consulta buscando um registro específico pelo nome, sem a existência de índices prévios.
+
+SQL
+
+EXPLAIN ANALYZE
+SELECT * FROM clientes WHERE nome = 'Cliente 500000';
+Resultado do Query Plan:
+
+Plaintext
+
+"Gather  (cost=1000.00..15553.43 rows=1 width=43) (actual time=54.419..154.336 rows=1 loops=1)"
+"  Workers Planned: 2"
+"  Workers Launched: 2"
+"  ->  Parallel Seq Scan on clientes  (cost=0.00..14553.33 rows=1 width=43) (actual time=19.081..25.421 rows=0 loops=3)"
+"        Filter: (nome = 'Cliente 500000'::text)"
+"        Rows Removed by Filter: 333333"
+"Planning Time: 1.130 ms"
+"Execution Time: 154.354 ms"
+Exercício 3: Criar um Índice e Realizar a Análise Novamente
+Criação de um índice B-Tree na coluna nome e reanálise da mesma consulta.
+
+SQL
+
+CREATE INDEX idx_clientes_nome ON clientes(nome);
+
+EXPLAIN ANALYZE
+SELECT * FROM clientes WHERE nome = 'Cliente 500000';
+Resultado do Query Plan:
+
+Plaintext
+
+"Index Scan using idx_clientes_nome on clientes  (cost=0.42..8.44 rows=1 width=43) (actual time=0.056..0.056 rows=1 loops=1)"
+"  Index Cond: (nome = 'Cliente 500000'::text)"
+"Planning Time: 1.209 ms"
+"Execution Time: 0.073 ms"
+Análise dos Resultados
+Index Scan: O plano mudou de Parallel Seq Scan para Index Scan. O banco de dados usou a estrutura de árvore do índice para localizar o registro de forma direta.
+
+Custo: O custo estimado caiu drasticamente (cost=0.42..8.44), refletindo a eficiência da operação.
+
+Exercício 4: Comparativo de Desempenho
+A comparação entre as consultas revela uma otimização fundamental no acesso aos dados:
+
+Sem índice: O banco realiza um Seq Scan (varredura sequencial), lendo cada um dos milhões de registros, resultando em alto custo e tempo de execução (~154ms).
+
+Com índice: O sistema altera para Index Scan, utilizando uma estrutura ordenada para localizar o registro diretamente.
+
+Essa abordagem "cirúrgica" evita a leitura desnecessária de dados, transformando uma consulta lenta de força bruta em uma operação rápida (~0.07ms) e precisa.
+
+Exercício 5: Análise de Diferentes Chaves de Indexação
+A "chave de busca" é o atributo usado na cláusula WHERE. A eficiência depende da existência de um índice correspondente a essa chave.
+
+5.1 Consulta em coluna sem índice (email)
+SQL
+
+EXPLAIN ANALYZE 
+SELECT * FROM clientes WHERE email = 'cliente123456@exemplo.com';
+Resultado: O banco realizou um Seq Scan com tempo de execução de ~53ms.
+
+5.2 Otimização
+Para otimizar, removemos o índice anterior (nome) e criamos um específico para o email:
+
+SQL
+
+DROP INDEX idx_clientes_nome;
+CREATE INDEX idx_clientes_email ON clientes(email);
+
+EXPLAIN ANALYZE 
+SELECT * FROM clientes WHERE email = 'cliente123456@exemplo.com';
+Resultado: O plano mudou para Index Scan com tempo de execução de ~0.048ms.
+
+Conclusão: A afirmação é correta. O desempenho depende de ter o índice certo para a chave de busca utilizada na query.
+
+Exercício 6: Pesquisa e Aplicação (Índices Compostos e Parciais)
+Preparação do ambiente para novos testes:
+
+SQL
+
+DROP TABLE IF EXISTS clientes;
+CREATE TABLE clientes (
+    id SERIAL PRIMARY KEY,
+    nome TEXT NOT NULL,
+    cidade TEXT NOT NULL,
+    idade INT NOT NULL
+);
+
+INSERT INTO clientes (nome, cidade, idade)
+SELECT
+    'Cliente ' || g,
+    'Cidade ' || (g % 100),
+    (random() * 80)::INT
+FROM generate_series(1, 1000000) g;
+A) Otimizando com Índice Composto
+Para consultas que filtram por múltiplas colunas:
+
+SQL
+
+SELECT * FROM clientes WHERE cidade = 'Cidade 50' AND idade = 30;
+A melhor estratégia é um índice composto:
+
+SQL
+
+CREATE INDEX idx_clientes_cidade_idade ON clientes(cidade, idade);
+O planner localiza rapidamente a cidade e, dentro desse subconjunto, filtra a idade.
+
+B) A Importância da Ordem das Colunas
+Se invertermos a criação do índice:
+
+SQL
+
+CREATE INDEX idx_clientes_idade_cidade ON clientes (idade, cidade);
+Ao executar a mesma consulta (WHERE cidade = ... AND idade = ...), o índice pode ser menos eficiente. O PostgreSQL prioriza a primeira coluna do índice (prefixo à esquerda) para a busca direta.
+
+C) Otimizando com Índice Parcial
+Para cenários onde filtramos frequentemente um subconjunto específico (ex: idosos), podemos usar índices parciais, que são menores e mais rápidos para atualizar.
+
+SQL
+
+CREATE INDEX idx_clientes_idade_maior_60 ON clientes(idade) WHERE idade > 60;
+Comparativo:
+
+SELECT * FROM clientes WHERE idade > 65; -> Usa o índice parcial (rápido).
+
+SELECT * FROM clientes WHERE idade < 20; -> Ignora o índice parcial (realiza Seq Scan).
